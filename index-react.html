@@ -7,7 +7,9 @@
     <title>Todo Goals App</title>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/redux/3.7.2/redux.min.js"></script>
-
+    <script src="https://unpkg.com/react@16.3.0-alpha.1/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@16.3.0-alpha.1/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6.15.0/babel.min.js"></script>
 </head>
 <body>
 
@@ -25,6 +27,11 @@
         <ul id="goals"></ul>
     </div>
 
+    <br>
+    <hr>
+    <br>
+
+    <div id="app"></div>
     
     <script type="text/javascript">
 
@@ -210,6 +217,94 @@
             node.appendChild(removeBtn);
             document.getElementById("goals").appendChild(node);
         }
+    </script>
+
+    <script type="text/babel">
+        function List(props) {
+            return (
+                <ul>
+                    <li>
+                        List
+                    </li>
+                </ul>
+            )
+        }
+
+        class Todos extends React.Component {
+            addItem = (e) => {
+                e.preventDefault();
+                const name = this.input.value;
+
+                this.input.value="";
+                
+                this.props.store.dispatch(
+                    addTodoAction({
+                        name: name,
+                        id: generateId(),
+                        complete: false
+                    })
+                )
+            }
+            render() {
+                return (
+                    <div>
+                        <h1>Todos List</h1>
+                        <input type="text" placeholder="Add todo" 
+                            ref={(input) => this.input = input}
+                        />
+                        <button onClick={this.addItem}>Add Item</button>
+                        <List />
+                    </div>
+                )
+            }
+        }
+
+        class Goals extends React.Component {
+            addItem = (e) => {
+                e.preventDefault();
+                const name = this.input.value;
+                this.input.value="";
+
+                this.props.store.dispatch(
+                    addGoalAction({
+                        name: name,
+                        id: generateId()
+                    })
+                )
+            }
+
+            render() {
+                return (
+                    <div>
+                        <h1>Goals List</h1>
+                        <input type="text" placeholder="Add Goal"
+                            ref={(input) => this.input = input}
+                        />
+                        <button onClick={this.addItem}>Add Goal</button>
+                        <List />
+                    </div>
+                )
+            }
+        }
+
+        class App extends React.Component {
+            render() {
+                return(
+                    <div>
+                        APP
+
+                        <Todos store={this.props.store} />
+                        <Goals store={this.props.store}/>
+
+                    </div>
+                )
+            }
+        }
+
+        ReactDOM.render(
+            <App store={mystore}/>,
+            document.getElementById("app")
+        )
     </script>
 
 </body>
