@@ -7,6 +7,9 @@
     <title>Todo Goals App</title>
 
     <script src="https://tylermcginnis.com/goals-todos-api/index.js"></script>
+
+    <script src="https://unpkg.com/redux-thunk@2.2.0/dist/redux-thunk.min.js"></script>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/redux/3.7.2/redux.min.js"></script>
     <script src="https://unpkg.com/react@16.3.0-alpha.1/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@16.3.0-alpha.1/umd/react-dom.development.js"></script>
@@ -23,6 +26,7 @@
 
         const [ADD_TODO, REMOVE_TODO, TOGGLE_TODO] = ["ADD_TODO", "REMOVE_TODO", "TOGGLE_TODO"];
         const [ADD_GOAL, REMOVE_GOAL] = ["ADD_GOAL", "REMOVE_GOAL"];
+        const RECEIVE_DATA = "RECEIVE_DATA";
 
         function addTodoAction(todo) {
             return {
@@ -38,10 +42,45 @@
             }
         }
 
+        function removeTodoAction(id) {
+            return {
+                type: REMOVE_TODO,
+                id: id
+            }
+        }
+
+        function removeGoalAction(id) {
+            return {
+                type: REMOVE_GOAL,
+                id: id
+            }
+        }
+
+        function toggleTodoAction(id) {
+            return {
+                type: TOGGLE_TODO,
+                id: id
+            }
+        }
+
+        function receiveDataAction(todos, goals) {
+            return {
+                type: RECEIVE_DATA,
+                goals: goals,
+                todos: todos
+            }
+        }
+
         function todos(state=[], action) {
             switch (action.type) {
                 case ADD_TODO:
                     return state.concat([action.todo]);
+                case REMOVE_TODO:
+                    return state.filter((todo) => todo.id !== action.id)
+                case TOGGLE_TODO: 
+                    return state.map((todo) => todo.id !== action.id ? todo: Object.assign({}, todo, {complete:!todo.complete}))
+                case RECEIVE_DATA:
+                    return action.todos;
                 default:
                     return state;
             }
@@ -51,18 +90,31 @@
             switch (action.type) {
                 case ADD_GOAL:
                     return state.concat([action.goal]);
+                case REMOVE_GOAL:
+                    return state.filter((goal) => goal.id !== action.id);
+                case RECEIVE_DATA:
+                    return action.goals;
                 default: 
                     return state;
             }
         }
 
-        checker = (state) => (next) => (action) => {
+        function loading(state=true, action) {
+            switch (action.type) {
+                case RECEIVE_DATA:
+                    return false;
+                default: 
+                    return state;
+            }
+        }
+
+        checker = (store) => (next) => (action) => {
             console.log("I'm in the checker");
 
             return next(action)
         }
 
-        logger = (state) => (next) => (action) => {
+        logger = (store) => (next) => (action) => {
             console.log("I'm inside the logger");
 
             return next(action)
@@ -71,8 +123,9 @@
         store = Redux.createStore(
             Redux.combineReducers({
                 todos,
-                goals
-            })
+                goals,
+                loading
+            }, Redux.applyMiddleware(checker, logger))
         );
 
     </script>
@@ -83,8 +136,11 @@
                 <ul>
                     {
                         props.items.map((item) => (
-                            <li key={item.id}>
-                                {item.name}
+                            <li key={item.id} >
+                                <span onClick={() => props.toggle && props.toggle(item.id)} 
+                                    style={{textDecoration: item.complete ? 'line-through':'none'}}
+                                >{item.name}</span>
+                                <button onClick={() => {props.remove(item)}}>X</button>
                             </li>
                         ))
                     }
@@ -107,6 +163,26 @@
                 )
             }
 
+            removeItem = (todo) => {
+                this.props.store.dispatch(removeTodoAction(todo.id));
+
+                return API.deleteTodo(todo.id)
+                    .catch(() => {
+                        alert("An error occured. Please try again.");
+                        this.props.store.dispatch(addTodoAction(todo));
+                    })
+            }
+
+            toggleItem = (id) => {
+                this.props.store.dispatch(toggleTodoAction(id));
+
+                return API.saveTodoToggle(id)
+                    .catch(() => {
+                        this.props.store.dispatch(toggleTodoAction(id))
+                        alert('An error occurred. Try again.')
+                    })
+            }
+
             render() {
                 return (
                     <div>
@@ -115,7 +191,10 @@
                             ref={(input) => this.input = input} 
                         />
                         <button onClick={this.addItem}>Add</button>
-                        <Lists items={this.props.todos}/>
+                        <Lists items={this.props.todos} 
+                            remove={this.removeItem}
+                            toggle={this.toggleItem}
+                        />
                     </div>
                 )
             }
@@ -135,6 +214,16 @@
                 )
             }
 
+            removeItem = (goal) => {
+                this.props.store.dispatch(removeGoalAction(goal.id));
+
+                return API.deleteGoal(goal.id)
+                    .catch(() => {
+                        alert("An error occured. Please try again.");
+                        this.props.store.dispatch(addGoalAction(goal));
+                    })
+            }
+
             render() {
                 return (
                     <div>
@@ -143,7 +232,9 @@
                             ref={(input) => this.input = input}
                         />
                         <button onClick={this.addItem}>Add</button>
-                        <Lists items={this.props.goals} />
+                        <Lists items={this.props.goals} 
+                            remove={this.removeItem}
+                        />
                     </div>
                 )
             }
@@ -157,8 +248,7 @@
                     API.fetchTodos(),
                     API.fetchGoals()
                 ]).then(([todos, goals]) => {
-                    console.log("todos: ", todos);
-                    console.log("goals: ", goals)
+                    store.dispatch(receiveDataAction(todos=todos, goals=goals));
                 })
 
                 store.subscribe(() => this.forceUpdate());
@@ -166,9 +256,13 @@
 
             render() {
                 const { store } = this.props;
-                const { todos, goals } = store.getState();
-                console.log(todos);
-                console.log(goals);
+                const { todos, goals, loading } = store.getState();
+
+                if (loading === true) {
+                    return (
+                        <h3> LOADING </h3>
+                    )
+                }
 
                 return (
                     <div>
